@@ -2,7 +2,7 @@ import { Client } from '@notionhq/client'
 import { config } from '../config/index.js'
 import { logger } from '../logger/index.js'
 
-// Inicializar cliente de Notion
+
 let notionClient: Client | null = null
 
 if (config.notion.apiKey) {
@@ -13,11 +13,11 @@ if (config.notion.apiKey) {
     logger.warn('NOTION_API_KEY no encontrada. Las funciones de Notion estarán deshabilitadas.')
 }
 
-// Tipos para nuestros datos
+
 export interface NotionNote {
     titulo: string
     contenido: string
-    etiquetas: string[] // Cambiado a array para múltiples etiquetas
+    etiquetas: string[] 
 }
 
 export interface NotionQueryResult {
@@ -26,11 +26,11 @@ export interface NotionQueryResult {
     contenido: string
     etiquetas: string[]
     fechaCreacion: string
-    relevancia?: number // Para búsquedas
-    coincidencias?: string[] // Partes que coinciden
+    relevancia?: number 
+    coincidencias?: string[] 
 }
 
-// Función para obtener todas las etiquetas disponibles en la base de datos
+
 export async function getAvailableTags(): Promise<string[]> {
     if (!notionClient || !config.notion.databaseId) {
         logger.error('Cliente de Notion no configurado correctamente')
@@ -57,7 +57,7 @@ export async function getAvailableTags(): Promise<string[]> {
     }
 }
 
-// Función para crear una nueva nota en Notion con múltiples etiquetas
+
 export async function createNotionNote(note: NotionNote): Promise<string | false> {
     if (!notionClient || !config.notion.databaseId) {
         logger.error('Cliente de Notion no configurado correctamente')
@@ -65,7 +65,7 @@ export async function createNotionNote(note: NotionNote): Promise<string | false
     }
 
     try {
-        // Convertir array de etiquetas al formato de Notion
+        
         const tagsForNotion = note.etiquetas.map(etiqueta => ({ name: etiqueta }))
 
         const response = await notionClient.pages.create({
@@ -113,7 +113,7 @@ export async function createNotionNote(note: NotionNote): Promise<string | false
     }
 }
 
-// Función para actualizar etiquetas de una nota existente
+
 export async function updateNoteTags(noteId: string, newTags: string[]): Promise<boolean> {
     if (!notionClient) {
         logger.error('Cliente de Notion no configurado correctamente')
@@ -140,7 +140,7 @@ export async function updateNoteTags(noteId: string, newTags: string[]): Promise
     }
 }
 
-// Función mejorada para búsqueda inteligente
+
 export async function queryNotionNotes(query?: string, etiqueta?: string): Promise<NotionQueryResult[]> {
     if (!notionClient || !config.notion.databaseId) {
         logger.error('Cliente de Notion no configurado correctamente')
@@ -148,7 +148,7 @@ export async function queryNotionNotes(query?: string, etiqueta?: string): Promi
     }
 
     try {
-        // Construir filtros para la consulta
+       
         const filter: any = {}
         
         if (etiqueta) {
@@ -185,7 +185,7 @@ export async function queryNotionNotes(query?: string, etiqueta?: string): Promi
             }
         })
 
-        // Si hay query de texto, aplicar búsqueda inteligente
+        
         if (query) {
             results = performIntelligentSearch(results, query)
         }
@@ -197,16 +197,16 @@ export async function queryNotionNotes(query?: string, etiqueta?: string): Promi
     }
 }
 
-// Función de búsqueda inteligente mejorada con sistema de niveles
+
 function performIntelligentSearch(notes: NotionQueryResult[], query: string): NotionQueryResult[] {
     const queryLower = query.toLowerCase().trim()
     
-    // Filtrar palabras muy cortas y palabras vacías
+    
     const stopWords = ['el', 'la', 'de', 'que', 'y', 'a', 'en', 'un', 'es', 'se', 'no', 'te', 'lo', 'le', 'da', 'su', 'por', 'son', 'con', 'para', 'las', 'del', 'los']
     const queryWords = queryLower.split(/\s+/)
         .filter(word => word.length > 2 && !stopWords.includes(word))
     
-    // NIVEL 1: Búsqueda exacta (máxima prioridad)
+    
     const exactMatches = searchExactMatches(notes, queryLower, queryWords)
     
     if (exactMatches.length > 0) {
@@ -217,7 +217,7 @@ function performIntelligentSearch(notes: NotionQueryResult[], query: string): No
         return exactMatches
     }
     
-    // NIVEL 2: Búsqueda con sinónimos (solo si no hay matches exactos)
+    
     const synonymMatches = searchWithSynonyms(notes, queryWords)
     
     if (synonymMatches.length > 0) {
@@ -228,7 +228,7 @@ function performIntelligentSearch(notes: NotionQueryResult[], query: string): No
         return synonymMatches
     }
     
-    // NIVEL 3: Búsqueda fuzzy muy permisiva (último recurso)
+    
     const fuzzyMatches = searchFuzzy(notes, queryWords)
     
     logger.info('Search completed', {
@@ -241,7 +241,6 @@ function performIntelligentSearch(notes: NotionQueryResult[], query: string): No
     return fuzzyMatches
 }
 
-// Función para búsqueda exacta
 function searchExactMatches(notes: NotionQueryResult[], queryLower: string, queryWords: string[]): NotionQueryResult[] {
     const resultsWithRelevance = notes.map(note => {
         let relevancia = 0
@@ -251,7 +250,7 @@ function searchExactMatches(notes: NotionQueryResult[], queryLower: string, quer
         const contenidoLower = note.contenido.toLowerCase()
         const etiquetasText = note.etiquetas.join(' ').toLowerCase()
         
-        // Búsqueda de la frase completa
+        
         if (tituloLower.includes(queryLower)) {
             relevancia += 30
             coincidencias.push(`Título contiene exactamente: "${queryLower}"`)
@@ -265,7 +264,7 @@ function searchExactMatches(notes: NotionQueryResult[], queryLower: string, quer
             coincidencias.push(`Etiqueta contiene exactamente: "${queryLower}"`)
         }
         
-        // Búsqueda de palabras individuales (solo si no encontró la frase completa)
+        
         if (relevancia === 0) {
             queryWords.forEach(word => {
                 if (tituloLower.includes(word)) {
@@ -295,9 +294,9 @@ function searchExactMatches(notes: NotionQueryResult[], queryLower: string, quer
         .sort((a, b) => (b.relevancia || 0) - (a.relevancia || 0))
 }
 
-// Función para búsqueda con sinónimos (solo si no hay matches exactos)
+
 function searchWithSynonyms(notes: NotionQueryResult[], queryWords: string[]): NotionQueryResult[] {
-    // Diccionario de sinónimos más específico
+    
     const synonyms: Record<string, string[]> = {
         'arepas': ['arepa', 'venezuelana', 'harina', 'maiz'],
         'pasta': ['espagueti', 'linguini', 'macarrones', 'italiana'],
@@ -348,7 +347,7 @@ function searchWithSynonyms(notes: NotionQueryResult[], queryWords: string[]): N
         .sort((a, b) => (b.relevancia || 0) - (a.relevancia || 0))
 }
 
-// Función para búsqueda fuzzy (último recurso)
+
 function searchFuzzy(notes: NotionQueryResult[], queryWords: string[]): NotionQueryResult[] {
     const resultsWithRelevance = notes.map(note => {
         let relevancia = 0
@@ -356,7 +355,7 @@ function searchFuzzy(notes: NotionQueryResult[], queryWords: string[]): NotionQu
         
         queryWords.forEach(word => {
             if (word.length > 4) {
-                // Búsqueda de subcadenas
+                
                 if (note.titulo.toLowerCase().includes(word.substring(0, 4)) || 
                     note.contenido.toLowerCase().includes(word.substring(0, 4))) {
                     relevancia += 1
@@ -377,7 +376,7 @@ function searchFuzzy(notes: NotionQueryResult[], queryWords: string[]): NotionQu
         .sort((a, b) => (b.relevancia || 0) - (a.relevancia || 0))
 }
 
-// Función para obtener conteo de notas por etiqueta
+
 export async function getNotesCount(): Promise<{ total: number, porEtiqueta: Record<string, number> }> {
     if (!notionClient || !config.notion.databaseId) {
         return { total: 0, porEtiqueta: {} }
@@ -408,15 +407,15 @@ export async function getNotesCount(): Promise<{ total: number, porEtiqueta: Rec
     }
 }
 
-// Función para buscar notas similares (para sugerir etiquetas)
+
 export async function findSimilarNotes(content: string): Promise<NotionQueryResult[]> {
-    // Extraer palabras clave del contenido
+    
     const words = content.toLowerCase().split(/\s+/).filter(word => word.length > 3)
-    const keyWords = words.slice(0, 3) // Tomar las primeras 3 palabras significativas
+    const keyWords = words.slice(0, 3) 
     
     if (keyWords.length === 0) return []
     
-    // Buscar notas que contengan palabras similares
+    
     const searchQuery = keyWords.join(' ')
     return await queryNotionNotes(searchQuery)
 }
