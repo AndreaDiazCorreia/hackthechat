@@ -36,7 +36,7 @@ class Logger {
     }
 
     private createLogger(options: LoggerConfig): PinoLogger {
-        const level = options.level || (config.logs.level as pino.LevelWithSilent) || 'info'
+        const level = options.level || (config.logger.level as pino.LevelWithSilent) || 'info'
 
         const baseConfig: pino.LoggerOptions = {
             name: this.context,
@@ -77,7 +77,7 @@ class Logger {
                 transport: {
                     target: 'pino-pretty',
                     options: {
-                        colorize: config.logs.colorize,
+                        colorize: true,
                         translateTime: 'yyyy-mm-dd HH:MM:ss',
                         ignore: 'pid,hostname,context,env',
                         messageFormat: '{msg}', // you can add more context to the log, just add [{context}] here :)
@@ -167,4 +167,4 @@ export function createLogger(context: string, options?: LoggerConfig): Logger {
 }
 
 // Default logger instance
-export const defaultLogger = createLogger('App')
+export const logger = createLogger('App')

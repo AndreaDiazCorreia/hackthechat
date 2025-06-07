@@ -1,44 +1,25 @@
-import { Browsers } from 'baileys'
+import dotenv from 'dotenv'
+
+dotenv.config()
 
 export const config = {
-    // Session
-    session: {
-        sessionPath: process.env.SESSION_NAME || 'auth_info_baileys'
-    },
-
-    // Baileys
-    baileys: {
-        browser: Browsers.macOS('Chrome'),
-        generateHighQualityLinkPreview: true,
-        syncFullHistory: false,
-        markOnlineOnConnect: false,
-        keepAliveIntervalMs: 60000,
-        qrTimeout: 40000
-    },
-
-    // Server
     server: {
-        port: parseInt(process.env.PORT || '8081')
+        port: process.env.PORT || 3000
     },
-
-    // Bot
     bot: {
-        name: process.env.BOT_NAME || 'HackTheChat',
+        name: process.env.BOT_NAME || 'Ikigai Bot',
+        sessionName: process.env.SESSION_NAME || 'ikigai_session',
         aiEnabled: process.env.AI_ENABLED === 'true'
     },
-
-    // OpenAI
     ai: {
-        apiKey: process.env.OPENAI_API_KEY || '',
-        systemPrompt: process.env.AI_SYSTEM_PROMPT || ''
+        apiKey: process.env.OPENAI_API_KEY,
+        systemPrompt: process.env.AI_SYSTEM_PROMPT || 'Eres Ikigai, un asistente inteligente para gestión de notas.'
     },
-
-    // Logging
-    logs: {
-        level: process.env.LOG_LEVEL || 'info',
-        colorize: true,
-        timestamp: true
+    notion: {
+        apiKey: process.env.NOTION_API_KEY,
+        databaseId: process.env.NOTION_DATABASE_ID
+    },
+    logger: {
+        level: process.env.LOG_LEVEL || 'info'
     }
 }
-
-export type Config = typeof config
