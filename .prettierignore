@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+lib/
+build/
+
+# Auth info
+auth_info_baileys/
+
+# Logs
+*.log
+logs/
+
+# Environment files
+.env
+.env.*
+
+# Package lock files
+package-lock.json
+yarn.lock
+
+# IDE files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db

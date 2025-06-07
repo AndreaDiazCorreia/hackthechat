@@ -1,0 +1,24 @@
+<html>
+    <head>
+        <title>Dashboard</title>
+    </head>
+    <body>
+        <h1>Connection Dashboard</h1>
+        <table>
+            <tr><th>Id</th><th>Last Login</th><th>Time Since Connected (s)</th><th>Status</th><th
+                >Action</th></tr>
+            <tr>
+                <td>{{info.id}}</td>
+                <td>{{info.lastLogin}}</td>
+                <td>{{#if timeSinceConnected}}{{timeSinceConnected}}{{else}}-{{/if}}</td>
+                <td>{{info.status}}</td>
+                <td>
+                    <form method='post' action='/dashboard/disconnect'>
+                        <button type='submit'>Disconnect</button>
+                    </form>
+                </td>
+            </tr>
+        </table>
+        <p><a href='/logout'>Logout</a></p>
+    </body>
+</html>
