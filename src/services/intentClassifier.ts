@@ -2,21 +2,21 @@ import { generateResponse } from '../ai/openai.js'
 import { logger } from '../logger/index.js'
 import { getAvailableTags, findSimilarNotes } from './notion.js'
 
-// Interfaz para las notas (actualizada para múltiples etiquetas)
+
 export interface Note {
     titulo: string
     contenido: string
     etiquetas: string[]
 }
 
-// Tipos para las respuestas del clasificador
+
 export interface SaveNoteIntent {
     type: 'save_note'
     titulo: string
     contenido: string
-    etiquetas: string[] // Cambiado a array
+    etiquetas: string[] 
     confidence: number
-    suggested_tags?: string[] // Etiquetas sugeridas basadas en contenido similar
+    suggested_tags?: string[] 
 }
 
 export interface QueryIntent {
@@ -46,7 +46,7 @@ export interface TagCorrectionIntent {
 
 export type IntentResult = SaveNoteIntent | QueryIntent | ConversationIntent | UnclearIntent | TagCorrectionIntent
 
-// Función para generar el prompt dinámico con etiquetas actuales
+
 async function generateClassificationPrompt(): Promise<string> {
     const availableTags = await getAvailableTags()
     const tagsString = availableTags.length > 0 ? availableTags.map(tag => `"${tag}"`).join(', ') : '"Otros"'
@@ -149,31 +149,30 @@ Para mensaje ambiguo:
 Analiza este mensaje del usuario:`
 }
 
-// Función para analizar contenido y sugerir etiquetas basadas en notas similares
+
 async function suggestTagsFromSimilarContent(content: string): Promise<string[]> {
     try {
         const similarNotes = await findSimilarNotes(content)
         if (similarNotes.length === 0) return []
 
-        // Extraer etiquetas más comunes de notas similares
+        
         const tagCounts: Record<string, number> = {}
         
-        similarNotes.slice(0, 5).forEach(note => { // Tomar solo las 5 más relevantes
-            // Manejar notas con el campo etiquetas (array)
+        similarNotes.slice(0, 5).forEach(note => { 
+            
             if (note.etiquetas && Array.isArray(note.etiquetas)) {
                 note.etiquetas.forEach(tag => {
                     tagCounts[tag] = (tagCounts[tag] || 0) + 1
                 })
             } 
-            // Manejar notas legacy con el campo etiqueta (string)
-            // Usando type assertion para acceder a propiedades que podrían no estar en la interfaz
+            
             const legacyNote = note as any
             if (legacyNote.etiqueta && typeof legacyNote.etiqueta === 'string') {
                 tagCounts[legacyNote.etiqueta] = (tagCounts[legacyNote.etiqueta] || 0) + 1
             }
         })
 
-        // Devolver etiquetas que aparezcan en al menos 2 notas similares
+        
         return Object.entries(tagCounts)
             .filter(([_, count]) => count >= 2)
             .sort(([_, a], [__, b]) => b - a)
@@ -188,13 +187,13 @@ async function suggestTagsFromSimilarContent(content: string): Promise<string[]>
 
 export async function classifyIntent(userMessage: string): Promise<IntentResult> {
     try {
-        // Generar prompt dinámico con etiquetas actuales
+        
         const dynamicPrompt = await generateClassificationPrompt()
         const fullPrompt = `${dynamicPrompt}\n\nMensaje: "${userMessage}"`
         
         const response = await generateResponse(fullPrompt)
         
-        // Intentar parsear la respuesta JSON
+        
         let result: IntentResult
         try {
             result = JSON.parse(response)
@@ -207,7 +206,7 @@ export async function classifyIntent(userMessage: string): Promise<IntentResult>
             }
         }
 
-        // Si es una nota, agregar sugerencias basadas en contenido similar
+        
         if (result.type === 'save_note') {
             const saveNoteResult = result as SaveNoteIntent
             const suggestedTags = await suggestTagsFromSimilarContent(saveNoteResult.contenido)
@@ -238,7 +237,7 @@ export async function classifyIntent(userMessage: string): Promise<IntentResult>
     }
 }
 
-// Función auxiliar para validar si una clasificación es confiable
+
 export function isHighConfidence(intent: IntentResult): boolean {
     if ('confidence' in intent) {
         return intent.confidence > 0.7
@@ -246,7 +245,7 @@ export function isHighConfidence(intent: IntentResult): boolean {
     return false
 }
 
-// Función mejorada para formatear respuestas de consulta con sistema de niveles
+
 export function formatQueryResponse(notes: any[], queryType: string, parameter?: string): string {
     if (notes.length === 0) {
         if (parameter) {
@@ -257,7 +256,7 @@ export function formatQueryResponse(notes: any[], queryType: string, parameter?:
 
     let response = ''
     
-    // Determinar el tipo de búsqueda realizada basado en la relevancia del primer resultado
+    
     const firstResult = notes[0]
     const isExactMatch = firstResult.relevancia && firstResult.relevancia >= 10
     const isSynonymMatch = firstResult.relevancia && firstResult.relevancia >= 3 && firstResult.relevancia < 10
@@ -288,11 +287,11 @@ export function formatQueryResponse(notes: any[], queryType: string, parameter?:
             response = `📋 Encontré ${notes.length} nota${notes.length > 1 ? 's' : ''}:\n\n`
     }
 
-    // Mostrar hasta 5 notas para no saturar WhatsApp
+    
     const limitedNotes = notes.slice(0, 5)
     
     limitedNotes.forEach((note, index) => {
-        // Guard against undefined or null contenido
+        
         const contenido = note.contenido || ''
         const shortContent = contenido.length > 80 
             ? contenido.substring(0, 80) + '...'
@@ -301,14 +300,14 @@ export function formatQueryResponse(notes: any[], queryType: string, parameter?:
         response += `${index + 1}. **${note.titulo}**\n`
         response += `   ${shortContent}\n`
         
-        // Mostrar etiquetas múltiples
+        
         if (note.etiquetas && Array.isArray(note.etiquetas)) {
             response += `   🏷️ ${note.etiquetas.join(', ')}\n`
         } else if (note.etiqueta) {
             response += `   🏷️ ${note.etiqueta}\n`
         }
         
-        // Mostrar relevancia y coincidencias mejoradas
+        
         if (note.relevancia && note.relevancia > 0) {
             if (note.relevancia >= 10) {
                 response += `   🎯 Coincidencia exacta`
@@ -331,7 +330,7 @@ export function formatQueryResponse(notes: any[], queryType: string, parameter?:
         response += `... y ${notes.length - 5} nota${notes.length - 5 > 1 ? 's' : ''} más.\n\n`
     }
 
-    // Agregar sugerencias específicas según el tipo de resultado
+    
     if (queryType === 'by_keyword') {
         if (isExactMatch) {
             response += `✅ *Estas son coincidencias exactas para "${parameter}"*`
@@ -349,9 +348,9 @@ export function formatQueryResponse(notes: any[], queryType: string, parameter?:
     return response
 }
 
-// Nueva función para manejar correcciones de etiquetas
+
 export function parseTagCorrection(message: string, noteContext?: string): TagCorrectionIntent | null {
-    // Patrones para detectar correcciones de etiquetas
+    
     const patterns = [
         /cambia.*etiqueta.*a\s+(.+)/i,
         /debería ser\s+(.+)/i,
@@ -363,12 +362,12 @@ export function parseTagCorrection(message: string, noteContext?: string): TagCo
         const match = message.match(pattern)
         if (match) {
             const newTagsText = match[1].trim()
-            // Split on commas or the word 'y' when used as a conjunction (surrounded by spaces)
+           
             const newTags = newTagsText.split(/,|\s+y\s+/).map(tag => tag.trim()).filter(tag => tag.length > 0)
             
             return {
                 type: 'tag_correction',
-                noteId: '', // Se llenará en el handler basado en contexto
+                noteId: '', 
                 newTags,
                 originalNote: noteContext || message
             }
