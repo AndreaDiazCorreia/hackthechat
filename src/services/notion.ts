@@ -58,7 +58,7 @@ export async function getAvailableTags(): Promise<string[]> {
 }
 
 // Función para crear una nueva nota en Notion con múltiples etiquetas
-export async function createNotionNote(note: NotionNote): Promise<boolean> {
+export async function createNotionNote(note: NotionNote): Promise<string | false> {
     if (!notionClient || !config.notion.databaseId) {
         logger.error('Cliente de Notion no configurado correctamente')
         return false
@@ -106,7 +106,7 @@ export async function createNotionNote(note: NotionNote): Promise<boolean> {
             titulo: note.titulo,
             etiquetas: note.etiquetas
         })
-        return true
+        return response.id
     } catch (error) {
         logger.error('Error al crear nota en Notion:', error)
         return false

@@ -49,7 +49,7 @@ export type IntentResult = SaveNoteIntent | QueryIntent | ConversationIntent | U
 // Función para generar el prompt dinámico con etiquetas actuales
 async function generateClassificationPrompt(): Promise<string> {
     const availableTags = await getAvailableTags()
-    const tagsString = availableTags.length > 0 ? availableTags.join('", "') : 'Otros'
+    const tagsString = availableTags.length > 0 ? availableTags.map(tag => `"${tag}"`).join(', ') : '"Otros"'
     
     return `
 Eres Ikigai, un asistente inteligente para gestión de notas via WhatsApp. Tu tarea es analizar cada mensaje y clasificar la intención del usuario.
@@ -159,9 +159,18 @@ async function suggestTagsFromSimilarContent(content: string): Promise<string[]>
         const tagCounts: Record<string, number> = {}
         
         similarNotes.slice(0, 5).forEach(note => { // Tomar solo las 5 más relevantes
-            note.etiquetas.forEach(tag => {
-                tagCounts[tag] = (tagCounts[tag] || 0) + 1
-            })
+            // Manejar notas con el campo etiquetas (array)
+            if (note.etiquetas && Array.isArray(note.etiquetas)) {
+                note.etiquetas.forEach(tag => {
+                    tagCounts[tag] = (tagCounts[tag] || 0) + 1
+                })
+            } 
+            // Manejar notas legacy con el campo etiqueta (string)
+            // Usando type assertion para acceder a propiedades que podrían no estar en la interfaz
+            const legacyNote = note as any
+            if (legacyNote.etiqueta && typeof legacyNote.etiqueta === 'string') {
+                tagCounts[legacyNote.etiqueta] = (tagCounts[legacyNote.etiqueta] || 0) + 1
+            }
         })
 
         // Devolver etiquetas que aparezcan en al menos 2 notas similares
@@ -283,9 +292,11 @@ export function formatQueryResponse(notes: any[], queryType: string, parameter?:
     const limitedNotes = notes.slice(0, 5)
     
     limitedNotes.forEach((note, index) => {
-        const shortContent = note.contenido.length > 80 
-            ? note.contenido.substring(0, 80) + '...'
-            : note.contenido
+        // Guard against undefined or null contenido
+        const contenido = note.contenido || ''
+        const shortContent = contenido.length > 80 
+            ? contenido.substring(0, 80) + '...'
+            : contenido
         
         response += `${index + 1}. **${note.titulo}**\n`
         response += `   ${shortContent}\n`
@@ -352,7 +363,8 @@ export function parseTagCorrection(message: string, noteContext?: string): TagCo
         const match = message.match(pattern)
         if (match) {
             const newTagsText = match[1].trim()
-            const newTags = newTagsText.split(/[,y]/).map(tag => tag.trim()).filter(tag => tag.length > 0)
+            // Split on commas or the word 'y' when used as a conjunction (surrounded by spaces)
+            const newTags = newTagsText.split(/,|\s+y\s+/).map(tag => tag.trim()).filter(tag => tag.length > 0)
             
             return {
                 type: 'tag_correction',

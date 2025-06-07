@@ -136,13 +136,13 @@ async function handleIntelligentMessage(sock: WASocket, remoteJid: string, textC
                     etiquetas: intent.etiquetas 
                 })
                 
-                const success = await createNotionNote({
+                const pageId = await createNotionNote({
                     titulo: intent.titulo,
                     contenido: intent.contenido,
                     etiquetas: intent.etiquetas
                 })
 
-                if (success) {
+                if (pageId) {
                     response = `✅ ¡Perfecto! Guardé tu nota "${intent.titulo}"`
                     
                     if (intent.etiquetas.length > 1) {
@@ -161,7 +161,7 @@ async function handleIntelligentMessage(sock: WASocket, remoteJid: string, textC
                             // Guardar contexto para posible corrección
                             context.awaitingTagCorrection = true
                             context.lastNote = {
-                                id: 'pending', // Se actualizará si hay corrección
+                                id: pageId, // Usar el ID real de la página creada
                                 titulo: intent.titulo,
                                 etiquetas: intent.etiquetas
                             }
@@ -170,7 +170,7 @@ async function handleIntelligentMessage(sock: WASocket, remoteJid: string, textC
                         response += `\n\n¿Las etiquetas están bien o quieres cambiar algo?`
                         context.awaitingTagCorrection = true
                         context.lastNote = {
-                            id: 'pending',
+                            id: pageId, // Usar el ID real de la página creada
                             titulo: intent.titulo,
                             etiquetas: intent.etiquetas
                         }
@@ -258,30 +258,21 @@ async function handleIntelligentMessage(sock: WASocket, remoteJid: string, textC
 
             case 'tag_correction': {
                 // Manejar corrección de etiquetas
-                if (context.lastNote) {
-                    // Buscar la nota real en Notion para obtener su ID
-                    const searchResults = await queryNotionNotes(context.lastNote.titulo)
-                    const actualNote = searchResults.find(note => 
-                        note.titulo.toLowerCase() === context.lastNote.titulo.toLowerCase()
-                    )
+                if (context.lastNote && context.lastNote.id) {
+                    // Usar directamente el ID almacenado en el contexto
+                    const success = await updateNoteTags(context.lastNote.id, intent.newTags)
                     
-                    if (actualNote) {
-                        const success = await updateNoteTags(actualNote.id, intent.newTags)
-                        
-                        if (success) {
-                            response = `✅ ¡Listo! Cambié las etiquetas de "${actualNote.titulo}" a: ${intent.newTags.join(', ')}`
-                            context.awaitingTagCorrection = false
-                            context.lastNote = undefined
-                        } else {
-                            response = 'Hubo un problema al actualizar las etiquetas. ¿Puedes intentar de nuevo?'
-                        }
+                    if (success) {
+                        response = `✅ ¡Listo! Cambié las etiquetas de "${context.lastNote.titulo}" a: ${intent.newTags.join(', ')}`
+                        context.awaitingTagCorrection = false
+                        context.lastNote = undefined
                     } else {
-                        response = 'No pude encontrar esa nota para actualizar. ¿Puedes ser más específico?'
+                        response = 'Hubo un problema al actualizar las etiquetas. ¿Puedes intentar de nuevo?'
                     }
                 } else {
                     response = 'No tengo contexto de qué nota quieres modificar. ¿Puedes especificar cuál?'
                 }
-                break
+                break;
             }
 
             default: {
