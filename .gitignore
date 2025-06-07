@@ -20,6 +20,7 @@ build/
 auth_info_baileys/
 auth_info.json
 creds.json
+ikigai_session/
 
 # Logs
 logs/
@@ -120,3 +121,4 @@ Thumbs.db
 *.session
 qr.png
 qr_code.png
+ikigai_session/
