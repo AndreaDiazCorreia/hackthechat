@@ -2,20 +2,6 @@ import dotenv from 'dotenv'
 
 dotenv.config()
 
-// Validate required environment variables
-const requiredEnvVars = [
-    'OPENAI_API_KEY',
-    'NOTION_API_KEY',
-    'NOTION_DATABASE_ID'
-]
-
-const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName])
-
-if (missingEnvVars.length > 0) {
-    throw new Error(`Missing required environment variables: ${missingEnvVars.join(', ')}\nPlease check your .env file and ensure all required variables are set.`)
-}
-
-
 export const config = {
     server: {
         port: process.env.PORT || 3000
@@ -24,6 +10,17 @@ export const config = {
         name: process.env.BOT_NAME || 'Ikigai Bot',
         sessionName: process.env.SESSION_NAME || 'ikigai_session',
         aiEnabled: process.env.AI_ENABLED === 'true'
+    },
+    session: {
+        sessionPath: process.env.SESSION_NAME || 'ikigai_session'
+    },
+    baileys: {
+        browser: ['Ikigai Bot', 'Desktop', '1.0.0'],
+        generateHighQualityLinkPreview: true,
+        syncFullHistory: false,
+        markOnlineOnConnect: true,
+        keepAliveIntervalMs: 10000,
+        qrTimeout: 60000
     },
     ai: {
         apiKey: process.env.OPENAI_API_KEY,
