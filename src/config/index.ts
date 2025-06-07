@@ -2,6 +2,20 @@ import dotenv from 'dotenv'
 
 dotenv.config()
 
+// Validate required environment variables
+const requiredEnvVars = [
+    'OPENAI_API_KEY',
+    'NOTION_API_KEY',
+    'NOTION_DATABASE_ID'
+]
+
+const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName])
+
+if (missingEnvVars.length > 0) {
+    throw new Error(`Missing required environment variables: ${missingEnvVars.join(', ')}\nPlease check your .env file and ensure all required variables are set.`)
+}
+
+
 export const config = {
     server: {
         port: process.env.PORT || 3000
