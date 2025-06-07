@@ -8,7 +8,6 @@ export const config = {
     },
     bot: {
         name: process.env.BOT_NAME || 'Ikigai Bot',
-        sessionName: process.env.SESSION_NAME || 'ikigai_session',
         aiEnabled: process.env.AI_ENABLED === 'true'
     },
     session: {

@@ -32,6 +32,12 @@ async function handleMessage(sock: WASocket, message: WAMessage) {
         const remoteJid = message.key.remoteJid
         if (!remoteJid) return
 
+        // Filtrar mensajes de grupos - solo procesar mensajes directos
+        if (remoteJid.endsWith('@g.us')) {
+            logger.info('Ignoring group message', { groupId: remoteJid })
+            return
+        }
+
         // Get the text content from the message
         const textContent =
             message.message?.conversation || 
@@ -92,7 +98,7 @@ async function handleIntelligentMessage(sock: WASocket, remoteJid: string, textC
         let response = ''
 
         switch (intent.type) {
-            case 'save_note':
+            case 'save_note': {
                 // Guardar la nota automáticamente
                 const noteData = {
                     titulo: intent.titulo,
@@ -109,31 +115,35 @@ async function handleIntelligentMessage(sock: WASocket, remoteJid: string, textC
                     response = '❌ Hubo un problema guardando la nota. ¿Puedes intentar de nuevo?'
                 }
                 break
+            }
 
-            case 'query':
+            case 'query': {
                 // Procesar consulta
                 logger.info('Processing query', { queryType: intent.queryType, parameter: intent.parameter })
                 let notes: any[] = []
                 
                 switch (intent.queryType) {
-                    case 'by_tag':
+                    case 'by_tag': {
                         if (intent.parameter) {
                             notes = await queryNotionNotes(undefined, intent.parameter)
                         }
                         break
+                    }
                     
-                    case 'by_keyword':
+                    case 'by_keyword': {
                         if (intent.parameter) {
                             notes = await queryNotionNotes(intent.parameter)
                         }
                         break
+                    }
                     
-                    case 'recent':
+                    case 'recent': {
                         notes = await queryNotionNotes()
                         notes = notes.slice(0, 10) // Las 10 más recientes
                         break
+                    }
                     
-                    case 'count':
+                    case 'count': {
                         const stats = await getNotesCount()
                         response = `📊 Tienes **${stats.total}** notas en total:\n\n`
                         
@@ -143,25 +153,30 @@ async function handleIntelligentMessage(sock: WASocket, remoteJid: string, textC
                         
                         response += `\n¿Quieres ver alguna categoría específica?`
                         break
+                    }
                 }
 
                 if (intent.queryType !== 'count') {
                     response = formatQueryResponse(notes, intent.queryType, intent.parameter)
                 }
                 break
+            }
 
-            case 'conversation':
+            case 'conversation': {
                 // Respuesta conversacional
                 response = intent.response
                 break
+            }
 
-            case 'unclear':
+            case 'unclear': {
                 // Pedir clarificación
                 response = intent.clarificationQuestion
                 break
+            }
 
-            default:
+            default: {
                 response = 'No estoy seguro de cómo ayudarte con eso. ¿Puedes ser más específico?'
+            }
         }
 
         // Enviar respuesta

@@ -1,6 +1,13 @@
 import { generateResponse } from '../ai/openai.js'
 import { logger } from '../logger/index.js'
 
+// Interfaz para las notas
+export interface Note {
+    titulo: string
+    contenido: string
+    etiqueta: string
+}
+
 // Tipos para las respuestas del clasificador
 export interface SaveNoteIntent {
     type: 'save_note'
@@ -142,7 +149,7 @@ export function isHighConfidence(intent: IntentResult): boolean {
 }
 
 // Función para formatear respuestas de consulta
-export function formatQueryResponse(notes: any[], queryType: string, parameter?: string): string {
+export function formatQueryResponse(notes: Note[], queryType: string, parameter?: string): string {
     if (notes.length === 0) {
         if (parameter) {
             return `No encontré notas sobre "${parameter}". ¿Quieres que guarde algo al respecto?`
