@@ -9,7 +9,7 @@ async function testNotion() {
         const testNote = {
             titulo: 'Nota de prueba',
             contenido: 'Esta es una nota de prueba para verificar la conexión con Notion.',
-            etiqueta: 'prueba'
+            etiquetas: ['prueba']
         }
 
         console.log('📝 Creando nota de prueba...')
@@ -28,7 +28,7 @@ async function testNotion() {
         console.log(`📊 Encontradas ${notes.length} notas:`)
         
         notes.forEach(note => {
-            console.log(`  - ${note.titulo} [${note.etiqueta}]`)
+            console.log(`  - ${note.titulo} [${note.etiquetas.join(', ')}]`)
         })
 
         // Probar conteo
