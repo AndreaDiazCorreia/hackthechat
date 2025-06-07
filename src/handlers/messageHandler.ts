@@ -1,10 +1,17 @@
 import { BaileysEventMap, WASocket, WAMessage } from 'baileys'
 import { config } from '../config/index.js'
-import { classifyIntent, formatQueryResponse } from '../services/intentClassifier.js'
-import { createNotionNote, queryNotionNotes, getNotesCount } from '../services/notion.js'
+import { classifyIntent, formatQueryResponse, parseTagCorrection } from '../services/intentClassifier.js'
+import { createNotionNote, queryNotionNotes, getNotesCount, updateNoteTags } from '../services/notion.js'
 import { createLogger } from '../logger/index.js'
 
 const logger = createLogger('MessageHandler')
+
+// Store para mantener contexto de conversaciones (en memoria)
+const conversationContext = new Map<string, {
+    lastNote?: any,
+    awaitingTagCorrection?: boolean,
+    lastQuery?: string
+}>()
 
 export function setupMessageHandler(sock: WASocket) {
     // Handle incoming messages
@@ -55,42 +62,66 @@ async function handleMessage(sock: WASocket, message: WAMessage) {
                              'archivo'
             
             await sock.sendMessage(remoteJid, { 
-                text: `📎 Recibí un ${mediaType}. Si quieres que lo guarde como nota, envíamelo de nuevo con una descripción.` 
+                text: `📎 Recibí un ${mediaType}. Para poder guardarlo como nota, ¿puedes enviarlo con una descripción o caption? Por ejemplo: "Esta es mi receta favorita" junto con la imagen.`
             })
             return
         }
 
-        logger.info('Message received', {
-            from: remoteJid,
-            text: textContent,
-            messageId: message.key.id
+        logger.info('Processing message', { 
+            from: remoteJid, 
+            content: textContent.substring(0, 100) + '...' 
         })
 
-        // Usar el nuevo sistema inteligente si AI está habilitado
-        if (config.bot.aiEnabled) {
-            await handleIntelligentMessage(sock, remoteJid, textContent)
+        // Obtener o crear contexto de conversación
+        const context = conversationContext.get(remoteJid) || {}
+
+        // Procesar con IA solo si está habilitada
+        if (config.bot.aiEnabled && config.ai.apiKey) {
+            await handleIntelligentMessage(sock, remoteJid, textContent, context)
         } else {
-            // Fallback al modo echo si AI está deshabilitado
-            await sock.sendMessage(remoteJid, {
-                text: `Echo: ${textContent}`
-            })
-            logger.info('Echo response sent', {
-                to: remoteJid,
-                originalText: textContent
+            // Respuesta básica sin IA
+            await sock.sendMessage(remoteJid, { 
+                text: 'Hola! Soy Ikigai. La funcionalidad de IA no está habilitada. Por favor, configura OPENAI_API_KEY y AI_ENABLED=true.' 
             })
         }
 
     } catch (error) {
-        logger.error('Error handling message', error, {
-            messageId: message.key.id,
-            from: message.key.remoteJid
-        })
+        logger.error('Error handling message:', error)
+        
+        // Respuesta de emergencia
+        if (message.key.remoteJid) {
+            await sock.sendMessage(message.key.remoteJid, { 
+                text: 'Disculpa, tuve un problema procesando tu mensaje. ¿Puedes intentar de nuevo?' 
+            })
+        }
     }
 }
 
-async function handleIntelligentMessage(sock: WASocket, remoteJid: string, textContent: string) {
+async function handleIntelligentMessage(sock: WASocket, remoteJid: string, textContent: string, context: any) {
     try {
-        logger.info('Processing intelligent message', { from: remoteJid, content: textContent })
+        // Verificar si es una corrección de etiquetas en base al contexto
+        if (context.awaitingTagCorrection && context.lastNote) {
+            const tagCorrection = parseTagCorrection(textContent, context.lastNote.titulo)
+            if (tagCorrection) {
+                const success = await updateNoteTags(context.lastNote.id, tagCorrection.newTags)
+                
+                if (success) {
+                    const response = `✅ ¡Perfecto! Actualicé las etiquetas de "${context.lastNote.titulo}" a: ${tagCorrection.newTags.join(', ')}`
+                    await sock.sendMessage(remoteJid, { text: response })
+                    
+                    // Limpiar contexto
+                    context.awaitingTagCorrection = false
+                    context.lastNote = undefined
+                } else {
+                    await sock.sendMessage(remoteJid, { 
+                        text: 'Hubo un problema al actualizar las etiquetas. ¿Puedes intentar de nuevo?' 
+                    })
+                }
+                
+                conversationContext.set(remoteJid, context)
+                return
+            }
+        }
 
         // Clasificar la intención del mensaje
         const intent = await classifyIntent(textContent)
@@ -99,27 +130,63 @@ async function handleIntelligentMessage(sock: WASocket, remoteJid: string, textC
 
         switch (intent.type) {
             case 'save_note': {
-                // Guardar la nota automáticamente
-                const noteData = {
+                // Guardar nota con múltiples etiquetas
+                logger.info('Saving note', { 
+                    titulo: intent.titulo, 
+                    etiquetas: intent.etiquetas 
+                })
+                
+                const pageId = await createNotionNote({
                     titulo: intent.titulo,
                     contenido: intent.contenido,
-                    etiqueta: intent.etiqueta
-                }
+                    etiquetas: intent.etiquetas
+                })
 
-                logger.info('Saving note', noteData)
-                const success = await createNotionNote(noteData)
-                
-                if (success) {
-                    response = `✅ Nota guardada: "${intent.titulo}" en ${intent.etiqueta}`
+                if (pageId) {
+                    response = `✅ ¡Perfecto! Guardé tu nota "${intent.titulo}"`
+                    
+                    if (intent.etiquetas.length > 1) {
+                        response += ` con las etiquetas: ${intent.etiquetas.join(', ')}`
+                    } else {
+                        response += ` en la categoría "${intent.etiquetas[0]}"`
+                    }
+                    
+                    // Agregar sugerencias si las hay
+                    if (intent.suggested_tags && intent.suggested_tags.length > 0) {
+                        const uniqueSuggested = intent.suggested_tags.filter(tag => !intent.etiquetas.includes(tag))
+                        if (uniqueSuggested.length > 0) {
+                            response += `\n\n💡 También podrías etiquetarla como: ${uniqueSuggested.join(', ')}`
+                            response += `\n¿Quieres agregar alguna de estas etiquetas?`
+                            
+                            // Guardar contexto para posible corrección
+                            context.awaitingTagCorrection = true
+                            context.lastNote = {
+                                id: pageId, // Usar el ID real de la página creada
+                                titulo: intent.titulo,
+                                etiquetas: intent.etiquetas
+                            }
+                        }
+                    } else {
+                        response += `\n\n¿Las etiquetas están bien o quieres cambiar algo?`
+                        context.awaitingTagCorrection = true
+                        context.lastNote = {
+                            id: pageId, // Usar el ID real de la página creada
+                            titulo: intent.titulo,
+                            etiquetas: intent.etiquetas
+                        }
+                    }
                 } else {
-                    response = '❌ Hubo un problema guardando la nota. ¿Puedes intentar de nuevo?'
+                    response = 'Lo siento, hubo un problema guardando tu nota. ¿Puedes intentar de nuevo?'
                 }
                 break
             }
 
             case 'query': {
-                // Procesar consulta
-                logger.info('Processing query', { queryType: intent.queryType, parameter: intent.parameter })
+                // Procesar consulta con búsqueda inteligente
+                logger.info('Processing intelligent query', { 
+                    queryType: intent.queryType, 
+                    parameter: intent.parameter 
+                })
                 let notes: any[] = []
                 
                 switch (intent.queryType) {
@@ -133,6 +200,9 @@ async function handleIntelligentMessage(sock: WASocket, remoteJid: string, textC
                     case 'by_keyword': {
                         if (intent.parameter) {
                             notes = await queryNotionNotes(intent.parameter)
+                            
+                            // Guardar la búsqueda en el contexto
+                            context.lastQuery = intent.parameter
                         }
                         break
                     }
@@ -158,6 +228,11 @@ async function handleIntelligentMessage(sock: WASocket, remoteJid: string, textC
 
                 if (intent.queryType !== 'count') {
                     response = formatQueryResponse(notes, intent.queryType, intent.parameter)
+                    
+                    // Agregar opciones adicionales si hay resultados
+                    if (notes.length > 0 && intent.queryType === 'by_keyword') {
+                        response += `\n\n¿Quieres refinar la búsqueda o ver detalles de alguna nota específica?`
+                    }
                 }
                 break
             }
@@ -165,6 +240,13 @@ async function handleIntelligentMessage(sock: WASocket, remoteJid: string, textC
             case 'conversation': {
                 // Respuesta conversacional
                 response = intent.response
+                
+                // Limpiar contexto en conversaciones casuales
+                if (textContent.toLowerCase().includes('hola') || textContent.toLowerCase().includes('gracias')) {
+                    context.awaitingTagCorrection = false
+                    context.lastNote = undefined
+                    context.lastQuery = undefined
+                }
                 break
             }
 
@@ -174,17 +256,40 @@ async function handleIntelligentMessage(sock: WASocket, remoteJid: string, textC
                 break
             }
 
+            case 'tag_correction': {
+                // Manejar corrección de etiquetas
+                if (context.lastNote && context.lastNote.id) {
+                    // Usar directamente el ID almacenado en el contexto
+                    const success = await updateNoteTags(context.lastNote.id, intent.newTags)
+                    
+                    if (success) {
+                        response = `✅ ¡Listo! Cambié las etiquetas de "${context.lastNote.titulo}" a: ${intent.newTags.join(', ')}`
+                        context.awaitingTagCorrection = false
+                        context.lastNote = undefined
+                    } else {
+                        response = 'Hubo un problema al actualizar las etiquetas. ¿Puedes intentar de nuevo?'
+                    }
+                } else {
+                    response = 'No tengo contexto de qué nota quieres modificar. ¿Puedes especificar cuál?'
+                }
+                break;
+            }
+
             default: {
                 response = 'No estoy seguro de cómo ayudarte con eso. ¿Puedes ser más específico?'
             }
         }
+
+        // Actualizar contexto
+        conversationContext.set(remoteJid, context)
 
         // Enviar respuesta
         await sock.sendMessage(remoteJid, { text: response })
         
         logger.info('Response sent successfully', { 
             type: intent.type, 
-            responseLength: response.length 
+            responseLength: response.length,
+            hasContext: Object.keys(context).length > 0
         })
 
     } catch (error) {
@@ -192,11 +297,6 @@ async function handleIntelligentMessage(sock: WASocket, remoteJid: string, textC
         
         // Respuesta de fallback en caso de error
         const fallbackResponse = 'Disculpa, tuve un problema procesando tu mensaje. ¿Puedes intentar de nuevo?'
-        
-        try {
-            await sock.sendMessage(remoteJid, { text: fallbackResponse })
-        } catch (sendError) {
-            logger.error('Error sending fallback response:', sendError)
-        }
+        await sock.sendMessage(remoteJid, { text: fallbackResponse })
     }
 }
